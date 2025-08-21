@@ -1,4 +1,7 @@
+import { db } from '../db';
+import { pdfConversionsTable } from '../db/schema';
 import { type UpdateConversionInput, type PdfConversion } from '../schema';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Updates the page settings (size and orientation) for a pending conversion.
@@ -6,19 +9,50 @@ import { type UpdateConversionInput, type PdfConversion } from '../schema';
  * the images into a final PDF document.
  */
 export async function updateConversion(input: UpdateConversionInput): Promise<PdfConversion> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is:
-    // 1. Validate that the conversion exists and is in pending status
-    // 2. Update the page_size and/or orientation fields if provided
-    // 3. Return the updated conversion record
-    return Promise.resolve({
-        id: input.id,
-        page_size: input.page_size || 'a4', // Fallback to existing value
-        orientation: input.orientation || 'portrait', // Fallback to existing value
-        status: 'pending',
-        pdf_file_path: null,
-        error_message: null,
-        created_at: new Date(),
-        completed_at: null
-    } as PdfConversion);
+  try {
+    // First, verify the conversion exists and is in pending status
+    const existingConversion = await db.select()
+      .from(pdfConversionsTable)
+      .where(eq(pdfConversionsTable.id, input.id))
+      .execute();
+
+    if (existingConversion.length === 0) {
+      throw new Error(`Conversion with ID ${input.id} not found`);
+    }
+
+    const conversion = existingConversion[0];
+
+    // Only allow updates to pending conversions
+    if (conversion.status !== 'pending') {
+      throw new Error(`Cannot update conversion with status: ${conversion.status}. Only pending conversions can be updated.`);
+    }
+
+    // Build update object with only provided fields
+    const updateFields: Partial<typeof pdfConversionsTable.$inferInsert> = {};
+    
+    if (input.page_size !== undefined) {
+      updateFields.page_size = input.page_size;
+    }
+    
+    if (input.orientation !== undefined) {
+      updateFields.orientation = input.orientation;
+    }
+
+    // If no fields to update, return existing conversion
+    if (Object.keys(updateFields).length === 0) {
+      return conversion;
+    }
+
+    // Update the conversion
+    const result = await db.update(pdfConversionsTable)
+      .set(updateFields)
+      .where(eq(pdfConversionsTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Conversion update failed:', error);
+    throw error;
+  }
 }

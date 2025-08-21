@@ -1,3 +1,5 @@
+import { db } from '../db';
+import { pdfConversionsTable } from '../db/schema';
 import { type CreateConversionInput, type PdfConversion } from '../schema';
 
 /**
@@ -6,17 +8,22 @@ import { type CreateConversionInput, type PdfConversion } from '../schema';
  * setting the initial status to 'pending'. Users can then upload images to this conversion.
  */
 export async function createConversion(input: CreateConversionInput): Promise<PdfConversion> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is creating a new PDF conversion session in the database
-    // with the specified page size and orientation settings.
-    return Promise.resolve({
-        id: 0, // Placeholder ID
+  try {
+    // Insert new PDF conversion record with pending status
+    const result = await db.insert(pdfConversionsTable)
+      .values({
         page_size: input.page_size,
         orientation: input.orientation,
         status: 'pending',
         pdf_file_path: null,
-        error_message: null,
-        created_at: new Date(),
-        completed_at: null
-    } as PdfConversion);
+        error_message: null
+      })
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Conversion creation failed:', error);
+    throw error;
+  }
 }
